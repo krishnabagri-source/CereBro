@@ -216,7 +216,7 @@ export default function App() {
       if (action === 'explain') {
         setTutorReply({ title: 'Concept Explanation', text: `${concept.lesson} For example: ${concept.example}`, isAi: false });
       } else if (action === 'hint') {
-        const h = concept.practice.hints?.[0] || `Focus on the core rule: ${concept.lesson}`;
+        const h = (concept.practice as any)?.hints?.[0] || `Focus on the core rule: ${concept.lesson}`;
         setTutorReply({ title: 'Helpful Hint', text: h, isAi: false });
       } else {
         setTutorReply({ title: 'Tutor Guidance', text: `Keep practicing ${concept.title}! Review the example and try again.`, isAi: false });
