@@ -1,4 +1,4 @@
-export type Question = { prompt: string; choices: string[]; answer: number; explanation: string };
+export type Question = { prompt: string; choices: string[]; answer: number; explanation: string; hints?: string[] };
 export type Concept = { id: string; title: string; description: string; level: string; prerequisites: string[]; lesson: string; example: string; practice: Question };
 export type Subject = { id: string; name: string; domain: string; level: string; description: string; icon: string; color: string; concepts: Concept[]; diagnostic: (Question & { conceptId: string })[] };
 export type RecordState = { mastery: number; attempts: number; correct: number; lastPracticed?: string; dueAt?: string; history: string[] };

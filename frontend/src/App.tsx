@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, Brain, Check, ChevronDown, CircleHelp, Clock3, Compass, Flame, LayoutDashboard, LockKeyhole, Menu, RotateCcw, Send, Sparkles, Target, X } from 'lucide-react';
-import { subjects as defaultSubjects, recordFor, recommend, seedProfiles, type Learner, type Subject, type Concept, type Question } from './engine';
+import { subjects as defaultSubjects, recordFor, recommend, seedProfiles, type Learner, type Subject, type Concept } from './engine';
 import { api, type ApiState, type RecommendationResponse } from './api';
 
 type Page = 'home' | 'subjects' | 'diagnostic' | 'dashboard' | 'lesson' | 'roadmap' | 'revision';
