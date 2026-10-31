@@ -1,0 +1,35 @@
+{
+  "name": "cerebro-adaptive-tutor",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:backend\" \"npm:dev:client\"",
+    "dev:client": "vite",
+    "dev:backend": "python -m uvicorn app.main:app --app-dir backend --port 8000 --reload",
+    "dev:server": "tsx watch server/index.ts",
+    "build": "tsc -b && vite build",
+    "start": "python -m uvicorn app.main:app --app-dir backend --port 8000",
+    "test:backend": "cd backend && python -m pytest tests -v",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.5"
+  }
+}
