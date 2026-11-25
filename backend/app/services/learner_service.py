@@ -91,8 +91,8 @@ class LearnerService:
         return db.query(Learner).filter(Learner.id == learner_id).first()
 
     @staticmethod
-    def create_learner(db: Session, name: str) -> Learner:
-        learner = Learner(name=name, active_subject_id="algebra", activity_log=json.dumps([]))
+    def create_learner(db: Session, name: str, subject_id: str = "algebra") -> Learner:
+        learner = Learner(name=name, active_subject_id=subject_id, activity_log=json.dumps([]))
         db.add(learner)
         db.commit()
         db.refresh(learner)

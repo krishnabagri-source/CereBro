@@ -14,6 +14,7 @@ class ConceptRecordState(BaseModel):
 
 class LearnerCreate(BaseModel):
     name: str
+    subject_id: Optional[str] = "algebra"
 
 class LearnerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -1,11 +1,13 @@
-from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, HTTPException, Body
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services.subject_service import subject_service
 from app.services.learner_service import learner_service
 
 router = APIRouter(tags=["Frontend Compatibility State"])
+
+_current_selection: Dict[str, Any] = {"active": 0, "subject": "algebra"}
 
 def get_public_state(db: Session, active_idx: int = 0, subject_id: str = "algebra") -> Dict[str, Any]:
     learners = learner_service.get_all_learners(db)
@@ -40,15 +42,23 @@ def health_check():
     return {"ok": True, "name": "AdaptIQ / CereBro Universal Backend", "version": "1.0.0"}
 
 @router.get("/state")
-def get_state(db: Session = Depends(get_db)):
+def get_state(
+    db: Session = Depends(get_db),
+    active: Optional[int] = None,
+    subject: Optional[str] = None
+):
     """State endpoint powering the existing frontend."""
-    return get_public_state(db, active_idx=0, subject_id="algebra")
+    active_idx = active if isinstance(active, int) else _current_selection["active"]
+    subject_id = subject if isinstance(subject, str) else _current_selection["subject"]
+    return get_public_state(db, active_idx=active_idx, subject_id=subject_id)
 
 @router.put("/selection")
 def update_selection(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     """Update active demo learner or selected subject."""
     active = int(payload.get("active", 0))
     subject = str(payload.get("subject", "algebra"))
+    _current_selection["active"] = active
+    _current_selection["subject"] = subject
 
     learners = learner_service.get_all_learners(db)
     if 0 <= active < len(learners):

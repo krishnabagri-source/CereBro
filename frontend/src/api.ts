@@ -102,8 +102,11 @@ export const api = {
   getSubjects: () => request<Subject[]>('/api/subjects'),
   getSubject: (subjectId: string) => request<Subject>(`/api/subjects/${subjectId}`),
   getSubjectConcepts: (subjectId: string) => request<Concept[]>(`/api/subjects/${subjectId}/concepts`),
-  createLearner: (name: string) =>
-    request<Learner & { id: number }>('/api/learners', { method: 'POST', body: JSON.stringify({ name }) }),
+  createLearner: (name: string, subjectId?: string) =>
+    request<Learner & { id: number; active_subject_id?: string }>('/api/learners', {
+      method: 'POST',
+      body: JSON.stringify({ name, subject_id: subjectId })
+    }),
   getLearnerProgress: (learnerId: number, subjectId?: string) =>
     request<any>(`/api/learners/${learnerId}/progress${subjectId ? `?subject_id=${subjectId}` : ''}`),
   startAssessment: (learnerId: number, subjectId: string, assessmentType = 'diagnostic') =>

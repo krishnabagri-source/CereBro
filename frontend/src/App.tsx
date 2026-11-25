@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Brain, Check, ChevronDown, CircleHelp, Clock3, Compass, Flame, LayoutDashboard, LockKeyhole, Menu, RotateCcw, Send, Sparkles, Target, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Brain, Check, ChevronDown, CircleHelp, Clock3, Compass, Flame, LayoutDashboard, Loader2, LockKeyhole, Menu, RotateCcw, Send, Sparkles, Target, UserPlus, X } from 'lucide-react';
 import { subjects as defaultSubjects, recordFor, recommend, seedProfiles, type Learner, type Subject, type Concept } from './engine';
 import { api, type ApiState, type RecommendationResponse } from './api';
 
@@ -19,6 +19,15 @@ export default function App() {
   const [lessonId, setLessonId] = useState('');
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Profile management & creation modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [newLearnerName, setNewLearnerName] = useState('');
+  const [newLearnerSubject, setNewLearnerSubject] = useState('algebra');
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [createSuccess, setCreateSuccess] = useState('');
 
   // Adaptive recommendation state
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
@@ -40,6 +49,17 @@ export default function App() {
     // Load backend state
     api.state()
       .then(state => {
+        // Restore active learner from localStorage if available
+        try {
+          const savedLearnerId = localStorage.getItem('cerebro_active_learner_id');
+          if (savedLearnerId && state.learners && state.learners.length > 0) {
+            const idx = state.learners.findIndex((l: any) => String(l.id) === savedLearnerId);
+            if (idx !== -1) {
+              state.active = idx;
+            }
+          }
+        } catch {}
+
         applyState(state);
         setApiError('');
       })
@@ -96,15 +116,75 @@ export default function App() {
     setAnswered(false);
     setTutorReply(null);
     setMisconceptionNotice(null);
+    setShowProfileMenu(false);
   };
 
   const selectLearner = async (index: number) => {
     setActive(index);
+    const target = learners[index];
+    if (target && (target as any).id) {
+      try {
+        localStorage.setItem('cerebro_active_learner_id', String((target as any).id));
+      } catch {}
+    }
     try {
       applyState(await api.select(index, subjectId));
       setApiError('');
     } catch (e) {
       setApiError(e instanceof Error ? e.message : 'Could not save profile selection.');
+    }
+  };
+
+  const handleCreateLearner = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newLearnerName.trim();
+    if (!trimmed) {
+      setCreateError('Please enter a learner name.');
+      return;
+    }
+    if (trimmed.length < 2) {
+      setCreateError('Learner name must be at least 2 characters.');
+      return;
+    }
+
+    setCreateSubmitting(true);
+    setCreateError('');
+    try {
+      const created = await api.createLearner(trimmed, newLearnerSubject);
+      setCreateSuccess(`Profile created for ${created.name}! Setting up personalized onboarding…`);
+
+      // Refresh backend state
+      const freshState = await api.state();
+      const newIdx = freshState.learners.findIndex((l: any) => l.id === created.id || l.name === created.name);
+      const activeIdx = newIdx !== -1 ? newIdx : freshState.learners.length - 1;
+
+      freshState.active = activeIdx;
+      freshState.subject = newLearnerSubject;
+      applyState(freshState);
+
+      // Save active ID in localStorage
+      if (created.id) {
+        try {
+          localStorage.setItem('cerebro_active_learner_id', String(created.id));
+        } catch {}
+      }
+
+      // Sync selection to backend
+      await api.select(activeIdx, newLearnerSubject).catch(() => {});
+
+      // Onboarding transition: close modal and take to Diagnostic Assessment
+      setTimeout(() => {
+        setShowCreateModal(false);
+        setCreateSubmitting(false);
+        setCreateSuccess('');
+        setNewLearnerName('');
+        setDiagIndex(0);
+        setDiagResults([]);
+        goto('diagnostic');
+      }, 650);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Could not create learner profile.');
+      setCreateSubmitting(false);
     }
   };
 
@@ -128,7 +208,7 @@ export default function App() {
     try {
       applyState(await api.diagnostic(active, subjectId, diagResults));
       setApiError('');
-      goto('dashboard');
+      goto('roadmap');
     } catch (e) {
       setApiError(e instanceof Error ? e.message : 'Could not save diagnostic results.');
     }
@@ -172,19 +252,24 @@ export default function App() {
       setApiError('');
 
       if (!res.is_correct) {
-        const feedback = res.ai_feedback || res.detected_misconception || 'Reviewing the rule above will help clarify this concept.';
+        const feedback = res.detected_misconception
+          ? (res.ai_feedback ? `${res.detected_misconception} — ${res.ai_feedback}` : res.detected_misconception)
+          : (res.ai_feedback || 'Reviewing the rule above will help clarify this concept.');
         setMisconceptionNotice(feedback);
       } else {
         setMisconceptionNotice(null);
       }
 
-      // Refresh state to sync updated mastery scores across UI
-      api.state().then(applyState).catch(() => {});
+      // Refresh state to sync updated mastery scores across UI without resetting current active learner or subject!
+      api.state().then(s => setLearners(s.learners)).catch(() => {});
+      api.getRecommendations(learnerDbId, subject.id)
+        .then(rec => setRecommendation(rec))
+        .catch(() => {});
     } catch (e) {
       // Fallback to compatibility practice endpoint
       try {
         const result = await api.practice(active, subjectId, concept.id, picked);
-        applyState(result);
+        setLearners(result.learners);
         setAnswered(true);
         setApiError('');
       } catch (err) {
@@ -266,16 +351,58 @@ export default function App() {
               <small>Little steps add up.</small>
             </div>
           </div>
-          <div className="profile-row">
-            <div className="avatar">{learner.name.split(' ').map(n => n[0]).join('')}</div>
-            <div className="profile-info">
-              <strong>{learner.name}</strong>
-              <small>Learning profile</small>
+          <div className="profile-row-wrap" style={{ position: 'relative' }}>
+            <div className="profile-row" onClick={() => setShowProfileMenu(!showProfileMenu)} style={{ cursor: 'pointer' }}>
+              <div className="avatar">{learner.name.split(' ').map(n => n[0]).join('')}</div>
+              <div className="profile-info">
+                <strong>{learner.name}</strong>
+                <small>Learning profile</small>
+              </div>
+              <button aria-label="Switch learner" className="icon-button" onClick={(e) => { e.stopPropagation(); setShowProfileMenu(!showProfileMenu); }}>
+                <ChevronDown size={16} />
+              </button>
             </div>
-            <button aria-label="Switch learner" className="icon-button" onClick={() => void selectLearner((active + 1) % learners.length)}>
-              <ChevronDown size={16} />
-            </button>
+
+            {showProfileMenu && (
+              <div className="profile-menu-dropdown">
+                <div className="profile-menu-header">Learner Profiles</div>
+                {learners.map((l, idx) => (
+                  <button
+                    key={`${l.name}-${idx}`}
+                    className={`profile-menu-item ${idx === active ? 'active' : ''}`}
+                    onClick={() => {
+                      void selectLearner(idx);
+                      setShowProfileMenu(false);
+                    }}
+                  >
+                    <span className="avatar small">{l.name.split(' ').map(n => n[0]).join('')}</span>
+                    <span className="profile-menu-name">{l.name}</span>
+                    {idx === active && <Check size={14} className="active-check" />}
+                  </button>
+                ))}
+                <div className="profile-menu-divider" />
+                <button
+                  className="profile-menu-action"
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    setShowCreateModal(true);
+                  }}
+                >
+                  <UserPlus size={15} />
+                  <span>Create Learner Profile</span>
+                </button>
+              </div>
+            )}
           </div>
+
+          <button
+            className="sidebar-create-btn"
+            onClick={() => setShowCreateModal(true)}
+            aria-label="Create new learner profile"
+          >
+            <UserPlus size={16} />
+            <span>Create Learner Profile</span>
+          </button>
         </div>
       </aside>
 
@@ -288,6 +415,14 @@ export default function App() {
             My learning <span>/</span> <b>{page === 'home' ? 'Welcome' : page === 'subjects' ? 'Subjects' : page === 'diagnostic' ? 'Quick check-in' : page === 'lesson' ? 'Learning session' : page === 'roadmap' ? 'Learning path' : page === 'revision' ? 'Revision' : 'Overview'}</b>
           </div>
           <div className="top-actions">
+            <button
+              className="new-profile-btn"
+              onClick={() => setShowCreateModal(true)}
+              aria-label="Create Learner Profile"
+            >
+              <UserPlus size={15} />
+              <span>Create Learner Profile</span>
+            </button>
             <div className="subject-switch">
               <span className={`mini-dot ${subject.color}`}></span>
               <select value={subjectId} onChange={e => void selectSubject(e.target.value)} aria-label="Choose current subject">
@@ -297,9 +432,46 @@ export default function App() {
               </select>
               <ChevronDown size={14} />
             </div>
-            <button className="avatar top-avatar" onClick={() => void selectLearner((active + 1) % learners.length)} title="Switch demo learner">
-              {learner.name.split(' ').map(n => n[0]).join('')}
-            </button>
+            <div style={{ position: 'relative' }}>
+              <button
+                className="avatar top-avatar"
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                title={`Active learner: ${learner.name}. Click to switch or create.`}
+                aria-label="Learner profile menu"
+              >
+                {learner.name.split(' ').map(n => n[0]).join('')}
+              </button>
+              {showProfileMenu && (
+                <div className="profile-menu-dropdown top-dropdown">
+                  <div className="profile-menu-header">Switch Learner Profile</div>
+                  {learners.map((l, idx) => (
+                    <button
+                      key={`${l.name}-${idx}`}
+                      className={`profile-menu-item ${idx === active ? 'active' : ''}`}
+                      onClick={() => {
+                        void selectLearner(idx);
+                        setShowProfileMenu(false);
+                      }}
+                    >
+                      <span className="avatar small">{l.name.split(' ').map(n => n[0]).join('')}</span>
+                      <span className="profile-menu-name">{l.name}</span>
+                      {idx === active && <Check size={14} className="active-check" />}
+                    </button>
+                  ))}
+                  <div className="profile-menu-divider" />
+                  <button
+                    className="profile-menu-action"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      setShowCreateModal(true);
+                    }}
+                  >
+                    <UserPlus size={15} />
+                    <span>Create Learner Profile</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -445,6 +617,26 @@ export default function App() {
           {/* DASHBOARD PAGE */}
           {page === 'dashboard' && (
             <>
+              {Object.values(learner.records).reduce((n, r) => n + r.attempts, 0) === 0 && (
+                <div className="onboarding-banner">
+                  <div className="onboarding-text">
+                    <span className="onboarding-badge"><Sparkles size={14} /> New Learner Setup</span>
+                    <h3>Welcome to CereBro, {learner.name.split(' ')[0]}!</h3>
+                    <p>
+                      Take a quick 3-question diagnostic check-in in <strong>{subject.name}</strong> to calibrate your starting mastery, or jump right into learning concepts.
+                    </p>
+                  </div>
+                  <div className="onboarding-actions">
+                    <button className="primary-button" onClick={startDiag}>
+                      Take Quick Check-in <ArrowRight size={15} />
+                    </button>
+                    <button className="soft-button" onClick={() => goto('roadmap')}>
+                      View Learning Path
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="dashboard-welcome">
                 <div>
                   <div className="eyebrow plain">YOUR LEARNING OVERVIEW</div>
@@ -652,7 +844,11 @@ export default function App() {
                           </div>
                         )}
                         <span className="mastery-change">
-                          Mastery is now {recordFor(learner, concept.id).mastery}% · {picked === concept.practice.answer ? 'Review in 3 days' : 'Review tomorrow'}
+                          Mastery is now {recordFor(learner, concept.id).mastery}% · {
+                            recordFor(learner, concept.id).dueAt
+                              ? `Next review: ${new Date(recordFor(learner, concept.id).dueAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+                              : picked === concept.practice.answer ? 'Review scheduled' : 'Review tomorrow'
+                          }
                         </span>
                       </div>
                     )}
@@ -768,6 +964,106 @@ export default function App() {
           <span>Curiosity, at your pace.</span>
         </footer>
       </main>
+
+      {/* CREATE LEARNER PROFILE MODAL */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => !createSubmitting && setShowCreateModal(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <div className="modal-header">
+              <div className="modal-title-wrap">
+                <span className="modal-icon"><UserPlus size={20} /></span>
+                <div>
+                  <h3 id="modal-title">Create Learner Profile</h3>
+                  <p>Set up an independent learning journey with personalized mastery tracking</p>
+                </div>
+              </div>
+              <button
+                className="modal-close-btn"
+                onClick={() => setShowCreateModal(false)}
+                disabled={createSubmitting}
+                aria-label="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateLearner} className="modal-form">
+              {createError && (
+                <div className="modal-error" role="alert">
+                  {createError}
+                </div>
+              )}
+              {createSuccess && (
+                <div className="modal-success" role="status">
+                  {createSuccess}
+                </div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="learner-name">Learner Name <span className="required">*</span></label>
+                <input
+                  id="learner-name"
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. Maya Chen, Sam Taylor"
+                  value={newLearnerName}
+                  onChange={e => setNewLearnerName(e.target.value)}
+                  disabled={createSubmitting}
+                  autoFocus
+                  required
+                />
+                <span className="form-help">Enter the student or learner's full or first name.</span>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="starting-subject">Starting Subject</label>
+                <select
+                  id="starting-subject"
+                  className="form-select"
+                  value={newLearnerSubject}
+                  onChange={e => setNewLearnerSubject(e.target.value)}
+                  disabled={createSubmitting}
+                >
+                  {subjectList.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.domain})
+                    </option>
+                  ))}
+                </select>
+                <span className="form-help">Choose which subject this learner will begin with.</span>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="soft-button"
+                  onClick={() => setShowCreateModal(false)}
+                  disabled={createSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={createSubmitting || !newLearnerName.trim()}
+                >
+                  {createSubmitting ? (
+                    <>
+                      <Loader2 size={16} className="spin" />
+                      <span>Creating Profile…</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={16} />
+                      <span>Create & Start Learning</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

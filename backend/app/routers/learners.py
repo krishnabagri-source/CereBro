@@ -12,9 +12,11 @@ router = APIRouter(prefix="/learners", tags=["Learners"])
 @router.post("", response_model=LearnerResponse, status_code=201)
 def create_learner(payload: LearnerCreate, db: Session = Depends(get_db)):
     """Create a new learner profile."""
-    if not payload.name.strip():
+    name = payload.name.strip()
+    if not name:
         raise HTTPException(status_code=400, detail="Learner name cannot be empty.")
-    learner = learner_service.create_learner(db, payload.name.strip())
+    subject_id = payload.subject_id or "algebra"
+    learner = learner_service.create_learner(db, name, subject_id=subject_id)
     return learner_service.get_learner_response(db, learner)
 
 @router.get("", response_model=List[LearnerResponse])
