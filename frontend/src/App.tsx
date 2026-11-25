@@ -89,6 +89,37 @@ export default function App() {
     loadData();
   }, []);
 
+  // Prevent background scrolling when mobile menu or modal is open
+  useEffect(() => {
+    if (menu || showCreateModal) {
+      document.body.classList.add('menu-open');
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      document.body.classList.remove('menu-open');
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
+    return () => {
+      document.body.classList.remove('menu-open');
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, [menu, showCreateModal]);
+
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    if (!showProfileMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.profile-menu-dropdown') && !target.closest('.profile-row') && !target.closest('.top-avatar')) {
+        setShowProfileMenu(false);
+      }
+    };
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [showProfileMenu]);
+
   const learner = learners[active] ?? learners[0];
   const learnerDbId = (learner as any).id ?? (active + 1);
 
@@ -421,7 +452,7 @@ export default function App() {
               aria-label="Create Learner Profile"
             >
               <UserPlus size={15} />
-              <span>Create Learner Profile</span>
+              <span className="btn-text">Create Learner Profile</span>
             </button>
             <div className="subject-switch">
               <span className={`mini-dot ${subject.color}`}></span>
