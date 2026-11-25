@@ -1,4 +1,53 @@
+# ─── Node / Frontend ───────────────────────────────────────────
 node_modules/
 dist/
-data/
 *.tsbuildinfo
+.npm/
+
+# ─── Python / Backend ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ─── Database / SQLite ─────────────────────────────────────────
+# Keep data/ directory structure but ignore the SQLite DB file itself
+backend/data/*.db
+backend/data/*.sqlite
+backend/data/*.sqlite3
+
+# ─── Environment & Secrets ─────────────────────────────────────
+.env
+# Keep .env.example in git (it's a safe template)
+!.env.example
+
+# ─── Build & Cache ─────────────────────────────────────────────
+data/
+*.log
+*.tmp
+*.temp
+*.cache
+
+# ─── IDE & Editor ──────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+
+# ─── Testing & Coverage ────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
